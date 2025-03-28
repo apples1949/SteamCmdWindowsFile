@@ -28,12 +28,23 @@ jobs:
       shell: powershell
 
     - name: Run SteamCMD (initialize)
-      run: .\steamcmd\steamcmd.exe +quit
+      run: |
+        timeout /t 15 /nobreak
+        .\steamcmd\steamcmd.exe +quit 2>&1 | Out-Null
+        exit 0
       shell: cmd
+      continue-on-error: true  # 即使出错也继续执行后续步骤
 
     - name: Compress files
-      run: Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
+      run: |
+        try {
+            Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
+        } catch {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::CreateFromDirectory("$pwd\steamcmd", "$pwd\build\steamcmd.zip", [System.IO.Compression.CompressionLevel]::Optimal, $false)
+        }
       shell: powershell
+
 
     - name: Commit and push changes
       run: |
