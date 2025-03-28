@@ -1,0 +1,45 @@
+name: SteamCMD Build Pipeline
+
+on:
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  build-steamcmd:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        persist-credentials: true  # 保持凭证用于后续推送
+
+    - name: Create build directory
+      run: New-Item -ItemType Directory -Path build -Force
+      shell: powershell
+
+    - name: Download SteamCMD
+      run: |
+        $url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
+        Invoke-WebRequest -Uri $url -OutFile steamcmd.zip
+      shell: powershell
+
+    - name: Extract SteamCMD
+      run: Expand-Archive -Path steamcmd.zip -DestinationPath steamcmd
+      shell: powershell
+
+    - name: Run SteamCMD (initialize)
+      run: .\steamcmd\steamcmd.exe +quit
+      shell: cmd
+
+    - name: Compress files
+      run: Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
+      shell: powershell
+
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add build/steamcmd.zip
+        git commit -m "Auto-update SteamCMD build"
+        git push
+      shell: bash
