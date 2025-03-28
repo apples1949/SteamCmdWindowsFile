@@ -1,7 +1,10 @@
 name: SteamCMD Build Pipeline
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
+
+permissions:  # 新增权限声明
+  contents: write  # 显式授予写权限
 
 jobs:
   build-steamcmd:
@@ -9,48 +12,64 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
-        persist-credentials: true  # 保持凭证用于后续推送
+        fetch-depth: 0  # 获取完整提交历史
+        persist-credentials: true
 
     - name: Create build directory
-      run: New-Item -ItemType Directory -Path build -Force
+      run: mkdir -Force build | Out-Null
       shell: powershell
 
     - name: Download SteamCMD
       run: |
-        $url = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"
-        Invoke-WebRequest -Uri $url -OutFile steamcmd.zip
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -OutFile steamcmd.zip
       shell: powershell
 
     - name: Extract SteamCMD
       run: Expand-Archive -Path steamcmd.zip -DestinationPath steamcmd
       shell: powershell
 
-    - name: Run SteamCMD (initialize)
+    - name: Initialize SteamCMD (安全模式)
       run: |
-        timeout /t 15 /nobreak
-        .\steamcmd\steamcmd.exe +quit 2>&1 | Out-Null
-        exit 0
-      shell: cmd
-      continue-on-error: true  # 即使出错也继续执行后续步骤
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "steamcmd\steamcmd.exe"
+        $psi.Arguments = "+quit"
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $process.WaitForExit(15000)  # 15秒等待
+        if (-not $process.HasExited) {
+            $process.Kill()
+            Write-Host "::warning::SteamCMD初始化超时，继续打包..."
+        }
+      shell: powershell
 
-    - name: Compress files
+    - name: 创建压缩包
       run: |
         try {
             Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
         } catch {
+            Write-Host "使用备用压缩方案..."
             Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [System.IO.Compression.ZipFile]::CreateFromDirectory("$pwd\steamcmd", "$pwd\build\steamcmd.zip", [System.IO.Compression.CompressionLevel]::Optimal, $false)
+            [IO.Compression.ZipFile]::CreateFromDirectory(
+                "$PWD\steamcmd", 
+                "$PWD\build\steamcmd.zip", 
+                [IO.Compression.CompressionLevel]::Optimal, 
+                $false
+            )
         }
       shell: powershell
 
-
-    - name: Commit and push changes
+    - name: 推送变更
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 显式传递token
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         git add build/steamcmd.zip
-        git commit -m "Auto-update SteamCMD build"
-        git push
+        git commit -m "Auto-build steamcmd [skip ci]"
+        git pull --rebase  # 处理可能的并发提交
+        git push origin HEAD:main
       shell: bash
