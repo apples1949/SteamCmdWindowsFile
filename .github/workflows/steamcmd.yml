@@ -34,15 +34,26 @@ jobs:
     - name: Initialize SteamCMD (安全模式)
       run: |
         $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "steamcmd\steamcmd.exe"
+        $psi.FileName = "$pwd\steamcmd\steamcmd.exe"
         $psi.Arguments = "+quit"
+        $psi.RedirectStandardOutput = $true
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
-        $process = [System.Diagnostics.Process]::Start($psi)
-        $process.WaitForExit(15000)  # 15秒等待
+        
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        $process.Start() | Out-Null
+        
+        # 带超时的等待
+        if (-not $process.WaitForExit(15000)) {
+            Write-Host "::warning::SteamCMD initialization timeout, continuing packaging..."
+            $process.Kill()
+            Start-Sleep -Seconds 1
+        }
+        
+        # 确保进程终止
         if (-not $process.HasExited) {
             $process.Kill()
-            Write-Host "::warning::SteamCMD初始化超时，继续打包..."
         }
       shell: powershell
 
