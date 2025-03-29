@@ -3,8 +3,8 @@ name: SteamCMD Build Pipeline
 on:
   workflow_dispatch:
 
-permissions:  # 新增权限声明
-  contents: write  # 显式授予写权限
+permissions:
+  contents: write
 
 jobs:
   build-steamcmd:
@@ -14,7 +14,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # 获取完整提交历史
+        fetch-depth: 0
         persist-credentials: true
 
     - name: Create build directory
@@ -44,14 +44,12 @@ jobs:
         $process.StartInfo = $psi
         $process.Start() | Out-Null
         
-        # 带超时的等待
         if (-not $process.WaitForExit(15000)) {
             Write-Host "::warning::SteamCMD initialization timeout, continuing packaging..."
             $process.Kill()
             Start-Sleep -Seconds 1
         }
         
-        # 确保进程终止
         if (-not $process.HasExited) {
             $process.Kill()
         }
@@ -59,27 +57,49 @@ jobs:
 
     - name: Create Zip File
       run: |
+        $excludePattern = '*siteserverui*'
+        
         try {
-            Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
-        } catch {
+            Get-ChildItem -Path steamcmd -Recurse | 
+            Where-Object { $_.FullName -notlike $excludePattern } | 
+            Compress-Archive -DestinationPath build/steamcmd.zip -Force -Update
+        } 
+        catch {
             Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [IO.Compression.ZipFile]::CreateFromDirectory(
-                "$PWD\steamcmd", 
-                "$PWD\build\steamcmd.zip", 
-                [IO.Compression.CompressionLevel]::Optimal, 
-                $false
-            )
+            
+            $sourceDir = "$PWD\steamcmd"
+            $zipPath = "$PWD\build\steamcmd.zip"
+            
+            [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Create).Dispose()
+
+            $archive = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Update)
+            try {
+                Get-ChildItem $sourceDir -Recurse | ForEach-Object {
+                    if ($_.FullName -notlike $excludePattern) {
+                        $entryName = $_.FullName.Substring($sourceDir.Length + 1)
+                        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                            $archive,
+                            $_.FullName,
+                            $entryName,
+                            [IO.Compression.CompressionLevel]::Optimal
+                        )
+                    }
+                }
+            } finally {
+                $archive.Dispose()
+            }
         }
       shell: powershell
 
+
     - name: Pull File
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 显式传递token
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         git add build/steamcmd.zip
         git commit -m "Auto-build steamcmd [skip ci]"
-        git pull --rebase  # 处理可能的并发提交
+        git pull --rebase
         git push origin HEAD:main
       shell: bash
