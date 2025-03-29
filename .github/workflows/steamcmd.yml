@@ -1,4 +1,4 @@
-name: SteamCMD Upload
+name: SteamCMD Build Pipeline
 
 on:
   workflow_dispatch:
@@ -55,55 +55,28 @@ jobs:
         }
       shell: powershell
 
+    - name: Remove siteserverui directory
+      run: Remove-Item -Path steamcmd\siteserverui -Recurse -Force -ErrorAction SilentlyContinue
+      shell: powershell
+
     - name: Create Zip File
       run: |
-        Add-Type -AssemblyName System.IO.Compression
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-        $excludePattern = '*siteserverui*'
-        $sourceDir = "$PWD\steamcmd"
-        $zipPath = "$PWD\build\steamcmd.zip"
-
         try {
-            Get-ChildItem -Path $sourceDir -Recurse |
-            Where-Object { $_.FullName -notlike $excludePattern } |
-            Compress-Archive -DestinationPath $zipPath -Force -Update
-        }
-        catch {
-            if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-            
-            $archive = [System.IO.Compression.ZipFile]::Open(
-                $zipPath,
-                [System.IO.Compression.ZipArchiveMode]::Create
+            Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
+        } catch {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [IO.Compression.ZipFile]::CreateFromDirectory(
+                "$PWD\steamcmd", 
+                "$PWD\build\steamcmd.zip", 
+                [IO.Compression.CompressionLevel]::Optimal, 
+                $false
             )
-            $archive.Dispose()
-
-            $archive = [System.IO.Compression.ZipFile]::Open(
-                $zipPath,
-                [System.IO.Compression.ZipArchiveMode]::Update
-            )
-
-            Get-ChildItem $sourceDir -Recurse | ForEach-Object {
-                if ($_.FullName -notlike $excludePattern) {
-                    $entryName = $_.FullName.Substring($sourceDir.Length + 1)
-                    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                        $archive,
-                        $_.FullName,
-                        $entryName,
-                        [System.IO.Compression.CompressionLevel]::Optimal
-                    )
-                }
-            }
-            $archive.Dispose()
-        }
-        finally {
-            if ($archive) { $archive.Dispose() }
         }
       shell: powershell
 
     - name: Pull File
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
