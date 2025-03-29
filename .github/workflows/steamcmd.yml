@@ -31,7 +31,7 @@ jobs:
       run: Expand-Archive -Path steamcmd.zip -DestinationPath steamcmd
       shell: powershell
 
-    - name: Initialize SteamCMD (安全模式)
+    - name: Initialize SteamCMD
       run: |
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = "$pwd\steamcmd\steamcmd.exe"
@@ -57,12 +57,11 @@ jobs:
         }
       shell: powershell
 
-    - name: 创建压缩包
+    - name: Create Zip File
       run: |
         try {
             Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
         } catch {
-            Write-Host "使用备用压缩方案..."
             Add-Type -AssemblyName System.IO.Compression.FileSystem
             [IO.Compression.ZipFile]::CreateFromDirectory(
                 "$PWD\steamcmd", 
@@ -73,7 +72,7 @@ jobs:
         }
       shell: powershell
 
-    - name: 推送变更
+    - name: Pull File
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 显式传递token
       run: |
