@@ -1,4 +1,4 @@
-name: SteamCMD Build Pipeline
+name: SteamCMD Upload
 
 on:
   workflow_dispatch:
@@ -57,40 +57,49 @@ jobs:
 
     - name: Create Zip File
       run: |
-        $excludePattern = '*siteserverui*'
-        
-        try {
-            Get-ChildItem -Path steamcmd -Recurse | 
-            Where-Object { $_.FullName -notlike $excludePattern } | 
-            Compress-Archive -DestinationPath build/steamcmd.zip -Force -Update
-        } 
-        catch {
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            
-            $sourceDir = "$PWD\steamcmd"
-            $zipPath = "$PWD\build\steamcmd.zip"
-            
-            [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Create).Dispose()
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-            $archive = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Update)
-            try {
-                Get-ChildItem $sourceDir -Recurse | ForEach-Object {
-                    if ($_.FullName -notlike $excludePattern) {
-                        $entryName = $_.FullName.Substring($sourceDir.Length + 1)
-                        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                            $archive,
-                            $_.FullName,
-                            $entryName,
-                            [IO.Compression.CompressionLevel]::Optimal
-                        )
-                    }
+        $excludePattern = '*siteserverui*'
+        $sourceDir = "$PWD\steamcmd"
+        $zipPath = "$PWD\build\steamcmd.zip"
+
+        try {
+            Get-ChildItem -Path $sourceDir -Recurse |
+            Where-Object { $_.FullName -notlike $excludePattern } |
+            Compress-Archive -DestinationPath $zipPath -Force -Update
+        }
+        catch {
+            if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+            
+            $archive = [System.IO.Compression.ZipFile]::Open(
+                $zipPath,
+                [System.IO.Compression.ZipArchiveMode]::Create
+            )
+            $archive.Dispose()
+
+            $archive = [System.IO.Compression.ZipFile]::Open(
+                $zipPath,
+                [System.IO.Compression.ZipArchiveMode]::Update
+            )
+
+            Get-ChildItem $sourceDir -Recurse | ForEach-Object {
+                if ($_.FullName -notlike $excludePattern) {
+                    $entryName = $_.FullName.Substring($sourceDir.Length + 1)
+                    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                        $archive,
+                        $_.FullName,
+                        $entryName,
+                        [System.IO.Compression.CompressionLevel]::Optimal
+                    )
                 }
-            } finally {
-                $archive.Dispose()
             }
+            $archive.Dispose()
+        }
+        finally {
+            if ($archive) { $archive.Dispose() }
         }
       shell: powershell
-
 
     - name: Pull File
       env:
