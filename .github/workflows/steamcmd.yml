@@ -67,7 +67,7 @@ jobs:
         }
       shell: powershell
 
-    - name: Create Zip File
+    - name: Create SteamCMD Zip
       run: |
         try {
             Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
@@ -82,14 +82,18 @@ jobs:
         }
       shell: powershell
 
-    - name: Pull File
+    - name: Create Package Zip
+      run: Compress-Archive -Path steamcmd\package -DestinationPath build/package.zip -Force
+      shell: powershell
+
+    - name: Commit and Push Files
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        git add build/steamcmd.zip
-        git commit -m "Auto-build steamcmd [skip ci]"
+        git add build/steamcmd.zip build/package.zip
+        git commit -m "Auto-update SteamCMD and Package [skip ci]"
         git pull --rebase
         git push origin HEAD:main
       shell: bash
