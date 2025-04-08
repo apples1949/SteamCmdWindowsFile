@@ -55,8 +55,14 @@ jobs:
         }
       shell: powershell
 
-    - name: Remove siteserverui directory
-      run: Remove-Item -Path steamcmd\siteserverui -Recurse -Force -ErrorAction SilentlyContinue
+    - name: Cleanup directory
+      run: |
+        Get-ChildItem -Path steamcmd | Where-Object { 
+            $_.Name -ne "package" -and $_.Name -ne "steamcmd.exe" 
+        } | ForEach-Object {
+            Write-Host "Removing item: $($_.FullName)"
+            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
       shell: powershell
 
     - name: Create Zip File
