@@ -3,5 +3,5 @@
 下载链接（加速）：https://raw.kkgithub.com/apples1949/SteamCmdWindowsFile/main/build/steamcmd.zip  
 
    
-针对更新加速，单独对更新包package文件进行打包。解压在package文件夹中。记得删除旧文件  
+针对更新加速，单独对更新包package文件夹进行打包。删除原来的package文件夹再解压。记得删除旧文件  
 下载链接（加速）：https://raw.kkgithub.com/apples1949/SteamCmdWindowsFile/main/build/package.zip
