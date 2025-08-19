@@ -46,44 +46,49 @@ jobs:
         $process.StartInfo = $psi
         $process.Start() | Out-Null
         
-        if (-not $process.WaitForExit(15000)) {
-            Write-Host "::warning::SteamCMD initialization timeout, continuing packaging..."
+        if (-not $process.WaitForExit(30000)) {
+            Write-Host "::warning::SteamCMD initialization timeout, force killing..."
             $process.Kill()
-            Start-Sleep -Seconds 1
         }
-        
         if (-not $process.HasExited) {
             $process.Kill()
+            Start-Sleep -Seconds 3
         }
+      shell: powershell
+
+    - name: Terminate residual SteamCMD processes
+      run: |
+        Get-Process -Name steamcmd -ErrorAction SilentlyContinue | 
+          Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
       shell: powershell
 
     - name: Cleanup directory
       run: |
+        $logPath = "$pwd\steamcmd\logs"
+        if (Test-Path $logPath) {
+            Remove-Item $logPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
         Get-ChildItem -Path steamcmd | Where-Object { 
             $_.Name -ne "package" -and $_.Name -ne "steamcmd.exe" 
-        } | ForEach-Object {
-            Write-Host "Removing item: $($_.FullName)"
-            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        }
+        } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
       shell: powershell
 
     - name: Create SteamCMD Zip
       run: |
-        try {
-            Compress-Archive -Path steamcmd\* -DestinationPath build/steamcmd.zip -Force
-        } catch {
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [IO.Compression.ZipFile]::CreateFromDirectory(
-                "$PWD\steamcmd", 
-                "$PWD\build\steamcmd.zip", 
-                [IO.Compression.CompressionLevel]::Optimal, 
-                $false
-            )
-        }
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::CreateFromDirectory(
+            "$PWD\steamcmd", 
+            "$PWD\build\steamcmd.zip", 
+            [IO.Compression.CompressionLevel]::Optimal, 
+            $false
+        )
       shell: powershell
 
     - name: Create Package Zip
-      run: Compress-Archive -Path steamcmd\package -DestinationPath build/package.zip -Force
+      run: |
+        Compress-Archive -Path steamcmd\package\* -DestinationPath build/package.zip -Force
       shell: powershell
 
     - name: Commit and Push Files
