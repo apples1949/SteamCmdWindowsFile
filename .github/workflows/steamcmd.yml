@@ -47,7 +47,7 @@ jobs:
         $process.Start() | Out-Null
         
         if (-not $process.WaitForExit(30000)) {
-            Write-Host "::warning::SteamCMD initialization timeout, force killing..."
+            Write-Host "::warning::SteamCMD initialization timeout, force killing...
             $process.Kill()
         }
         if (-not $process.HasExited) {
@@ -77,10 +77,15 @@ jobs:
 
     - name: Create SteamCMD Zip
       run: |
+        $zipPath = "$PWD\build\steamcmd.zip"
+        if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+        }
+        
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [IO.Compression.ZipFile]::CreateFromDirectory(
             "$PWD\steamcmd", 
-            "$PWD\build\steamcmd.zip", 
+            $zipPath, 
             [IO.Compression.CompressionLevel]::Optimal, 
             $false
         )
@@ -88,7 +93,11 @@ jobs:
 
     - name: Create Package Zip
       run: |
-        Compress-Archive -Path steamcmd\package\* -DestinationPath build/package.zip -Force
+        $pkgPath = "$PWD\build\package.zip"
+        if (Test-Path $pkgPath) {
+            Remove-Item $pkgPath -Force -ErrorAction SilentlyContinue
+        }
+        Compress-Archive -Path steamcmd\package\* -DestinationPath $pkgPath -Force
       shell: powershell
 
     - name: Commit and Push Files
