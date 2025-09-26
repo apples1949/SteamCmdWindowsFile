@@ -75,7 +75,7 @@ jobs:
 
     - name: Create SteamCMD Zip
       run: |
-        $zipPath = "$PWD\build\steamcmd_windows.zip"
+        $zipPath = "$PWD\build\steamcmd.zip"
         if (Test-Path $zipPath) {
             Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
         }
@@ -91,7 +91,7 @@ jobs:
 
     - name: Create Package Zip
       run: |
-        $pkgPath = "$PWD\build\package_windows.zip"
+        $pkgPath = "$PWD\build\package.zip"
         if (Test-Path $pkgPath) {
             Remove-Item $pkgPath -Force -ErrorAction SilentlyContinue
         }
@@ -102,16 +102,16 @@ jobs:
       run: |
         echo "Checking if files exist..."
         dir "$PWD\build\"
-        if (Test-Path "$PWD\build\steamcmd_windows.zip") {
-            echo "✅ steamcmd_windows.zip exists"
+        if (Test-Path "$PWD\build\steamcmd.zip") {
+            echo "✅ steamcmd.zip exists"
         } else {
-            echo "❌ steamcmd_windows.zip does not exist"
+            echo "❌ steamcmd.zip does not exist"
             exit 1
         }
-        if (Test-Path "$PWD\build\package_windows.zip") {
-            echo "✅ package_windows.zip exists"
+        if (Test-Path "$PWD\build\package.zip") {
+            echo "✅ package.zip exists"
         } else {
-            echo "❌ package_windows.zip does not exist"
+            echo "❌ package.zip does not exist"
             exit 1
         }
       shell: powershell
@@ -179,13 +179,13 @@ jobs:
         body: |
           自动生成的 SteamCMD Windows 构建
           - 构建时间: ${{ steps.release_info.outputs.BUILD_TIME }}
-          - steamcmd_windows.zip为SteamCmd全包，加速链接:https://gh-proxy.com/github.com/${{ github.repository }}/releases/download/steamcmd-windows-latest/steamcmd_windows.zip
-          - package_windows.zip为更新包，加速链接:https://gh-proxy.com/github.com/${{ github.repository }}/releases/download/steamcmd-windows-latest/package_windows.zip
+          - steamcmd.zip为SteamCmd全包，加速链接:https://gh-proxy.com/github.com/${{ github.repository }}/releases/download/steamcmd-windows-latest/steamcmd.zip
+          - package.zip为更新包，加速链接:https://gh-proxy.com/github.com/${{ github.repository }}/releases/download/steamcmd-windows-latest/package.zip
           - 此发布每 4 小时自动更新一次
         draft: false
         prerelease: false
         files: |
-          build/steamcmd_windows.zip
-          build/package_windows.zip
+          build/steamcmd.zip
+          build/package.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
