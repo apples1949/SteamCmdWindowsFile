@@ -185,7 +185,7 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          ${{ github.workspace }}/build/steamcmd_windows.zip
-          ${{ github.workspace }}/build/package_windows.zip
+          build/steamcmd_windows.zip
+          build/package_windows.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
