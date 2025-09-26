@@ -119,10 +119,14 @@ jobs:
     - name: Generate Release Info
       id: release_info
       run: |
-        $releaseName = "SteamCMD Windows Build $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-        $buildTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        $beijingTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::Now, "China Standard Time")
+        $releaseName = "SteamCMD Windows Build $($beijingTime.ToString('yyyy-MM-dd HH:mm'))"
+        $buildTime = $beijingTime.ToString('yyyy-MM-dd HH:mm:ss')
+        
         echo "RELEASE_NAME=$releaseName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         echo "BUILD_TIME=$buildTime" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "UTC+8: $([DateTime]::UtcNow)"
+        echo "beijingTime: $beijingTime"
         echo "Generated release name: $releaseName"
         echo "Generated build time: $buildTime"
       shell: powershell
