@@ -16,28 +16,45 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Set working directory to C drive
+      run: |
+        # 切换到C盘根目录
+        cd C:\
+        # 创建项目工作目录
+        New-Item -ItemType Directory -Force -Path "C:\steamcmd-build"
+        # 设置后续步骤的工作目录
+        echo "WORKING_DIR=C:\steamcmd-build" | Out-File -FilePath $env:GITHUB_ENV -Append
+      shell: powershell
+
     - name: Create build directory
-      run: mkdir -Force build | Out-Null
+      run: |
+        cd $env:WORKING_DIR
+        New-Item -ItemType Directory -Force -Path "build" | Out-Null
       shell: powershell
 
     - name: Download SteamCMD
       run: |
+        cd $env:WORKING_DIR
         $ProgressPreference = 'SilentlyContinue'
-        Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -OutFile steamcmd.zip
+        Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -OutFile "C:\steamcmd-build\steamcmd.zip"
       shell: powershell
 
     - name: Extract SteamCMD
-      run: Expand-Archive -Path steamcmd.zip -DestinationPath steamcmd
+      run: |
+        cd $env:WORKING_DIR
+        Expand-Archive -Path "C:\steamcmd-build\steamcmd.zip" -DestinationPath "C:\steamcmd-build\steamcmd"
       shell: powershell
 
     - name: Initialize SteamCMD
       run: |
+        cd $env:WORKING_DIR
         $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "$pwd\steamcmd\steamcmd.exe"
+        $psi.FileName = "C:\steamcmd-build\steamcmd\steamcmd.exe"
         $psi.Arguments = "+quit"
         $psi.RedirectStandardOutput = $true
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
+        $psi.WorkingDirectory = "C:\steamcmd-build\steamcmd"
         
         $process = New-Object System.Diagnostics.Process
         $process.StartInfo = $psi
@@ -63,26 +80,28 @@ jobs:
 
     - name: Cleanup directory
       run: |
-        $logPath = "$pwd\steamcmd\logs"
+        cd $env:WORKING_DIR
+        $logPath = "C:\steamcmd-build\steamcmd\logs"
         if (Test-Path $logPath) {
             Remove-Item $logPath -Recurse -Force -ErrorAction SilentlyContinue
         }
         
-        Get-ChildItem -Path steamcmd | Where-Object { 
+        Get-ChildItem -Path "C:\steamcmd-build\steamcmd" | Where-Object { 
             $_.Name -ne "package" -and $_.Name -ne "steamcmd.exe" 
         } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
       shell: powershell
 
     - name: Create SteamCMD Zip
       run: |
-        $zipPath = "$PWD\build\steamcmd.zip"
+        cd $env:WORKING_DIR
+        $zipPath = "C:\steamcmd-build\build\steamcmd.zip"
         if (Test-Path $zipPath) {
             Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
         }
         
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [IO.Compression.ZipFile]::CreateFromDirectory(
-            "$PWD\steamcmd", 
+            "C:\steamcmd-build\steamcmd", 
             $zipPath, 
             [IO.Compression.CompressionLevel]::Optimal, 
             $false
@@ -91,24 +110,26 @@ jobs:
 
     - name: Create Package Zip
       run: |
-        $pkgPath = "$PWD\build\package.zip"
+        cd $env:WORKING_DIR
+        $pkgPath = "C:\steamcmd-build\build\package.zip"
         if (Test-Path $pkgPath) {
             Remove-Item $pkgPath -Force -ErrorAction SilentlyContinue
         }
-        Compress-Archive -Path steamcmd\package\* -DestinationPath $pkgPath -Force
+        Compress-Archive -Path "C:\steamcmd-build\steamcmd\package\*" -DestinationPath $pkgPath -Force
       shell: powershell
 
     - name: Verify files exist
       run: |
+        cd $env:WORKING_DIR
         echo "Checking if files exist..."
-        dir "$PWD\build\"
-        if (Test-Path "$PWD\build\steamcmd.zip") {
+        dir "C:\steamcmd-build\build\"
+        if (Test-Path "C:\steamcmd-build\build\steamcmd.zip") {
             echo "✅ steamcmd.zip exists"
         } else {
             echo "❌ steamcmd.zip does not exist"
             exit 1
         }
-        if (Test-Path "$PWD\build\package.zip") {
+        if (Test-Path "C:\steamcmd-build\build\package.zip") {
             echo "✅ package.zip exists"
         } else {
             echo "❌ package.zip does not exist"
@@ -119,6 +140,7 @@ jobs:
     - name: Generate Release Info
       id: release_info
       run: |
+        cd $env:WORKING_DIR
         $beijingTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::Now, "China Standard Time")
         $releaseName = "SteamCMD Windows Build $($beijingTime.ToString('yyyy-MM-dd HH:mm'))"
         $buildTime = $beijingTime.ToString('yyyy-MM-dd HH:mm:ss')
@@ -189,7 +211,7 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          build/steamcmd.zip
-          build/package.zip
+          C:\steamcmd-build\build\steamcmd.zip
+          C:\steamcmd-build\build\package.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
