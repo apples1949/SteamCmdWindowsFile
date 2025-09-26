@@ -1,0 +1,191 @@
+name: SteamCMD Windows Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */4 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  build-steamcmd:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create build directory
+      run: mkdir -Force build | Out-Null
+      shell: powershell
+
+    - name: Download SteamCMD
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -OutFile steamcmd.zip
+      shell: powershell
+
+    - name: Extract SteamCMD
+      run: Expand-Archive -Path steamcmd.zip -DestinationPath steamcmd
+      shell: powershell
+
+    - name: Initialize SteamCMD
+      run: |
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "$pwd\steamcmd\steamcmd.exe"
+        $psi.Arguments = "+quit"
+        $psi.RedirectStandardOutput = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        $process.Start() | Out-Null
+        
+        $exited = $process.WaitForExit(30000)
+        if (-not $exited) {
+            Write-Host "::warning::SteamCMD initialization timeout, force killing..."
+            $process.Kill()
+        }
+        if (-not $process.HasExited) {
+            $process.Kill()
+            Start-Sleep -Seconds 3
+        }
+      shell: powershell
+
+    - name: Terminate residual SteamCMD processes
+      run: |
+        Get-Process -Name steamcmd -ErrorAction SilentlyContinue | 
+          Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
+      shell: powershell
+
+    - name: Cleanup directory
+      run: |
+        $logPath = "$pwd\steamcmd\logs"
+        if (Test-Path $logPath) {
+            Remove-Item $logPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
+        Get-ChildItem -Path steamcmd | Where-Object { 
+            $_.Name -ne "package" -and $_.Name -ne "steamcmd.exe" 
+        } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+      shell: powershell
+
+    - name: Create SteamCMD Zip
+      run: |
+        $zipPath = "$PWD\build\steamcmd_windows.zip"
+        if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+        }
+        
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::CreateFromDirectory(
+            "$PWD\steamcmd", 
+            $zipPath, 
+            [IO.Compression.CompressionLevel]::Optimal, 
+            $false
+        )
+      shell: powershell
+
+    - name: Create Package Zip
+      run: |
+        $pkgPath = "$PWD\build\package_windows.zip"
+        if (Test-Path $pkgPath) {
+            Remove-Item $pkgPath -Force -ErrorAction SilentlyContinue
+        }
+        Compress-Archive -Path steamcmd\package\* -DestinationPath $pkgPath -Force
+      shell: powershell
+
+    - name: Verify files exist
+      run: |
+        echo "Checking if files exist..."
+        dir "$PWD\build\"
+        if (Test-Path "$PWD\build\steamcmd_windows.zip") {
+            echo "✅ steamcmd_windows.zip exists"
+        } else {
+            echo "❌ steamcmd_windows.zip does not exist"
+            exit 1
+        }
+        if (Test-Path "$PWD\build\package_windows.zip") {
+            echo "✅ package_windows.zip exists"
+        } else {
+            echo "❌ package_windows.zip does not exist"
+            exit 1
+        }
+      shell: powershell
+
+    - name: Generate Release Info
+      id: release_info
+      run: |
+        $releaseName = "SteamCMD Windows Build $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+        $buildTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        echo "RELEASE_NAME=$releaseName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "BUILD_TIME=$buildTime" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "Generated release name: $releaseName"
+        echo "Generated build time: $buildTime"
+      shell: powershell
+
+    - name: Check and delete existing release
+      id: check_release
+      uses: actions/github-script@v7
+      with:
+        script: |
+          try {
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: 'steamcmd-windows-latest'
+            });
+            
+            await github.rest.repos.deleteRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.data.id
+            });
+            
+            console.log('已删除现有发布');
+            
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'tags/steamcmd-windows-latest'
+              });
+              console.log('已删除现有标签');
+            } catch (tagError) {
+              console.log('删除标签时出错，可能标签不存在:', tagError.message);
+            }
+            
+            return { exists: true };
+          } catch (error) {
+            if (error.status === 404) {
+              console.log('发布不存在，将继续创建新发布');
+              return { exists: false };
+            }
+            console.log('检查发布时出错:', error.message);
+            throw error;
+          }
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: steamcmd-windows-latest
+        name: ${{ steps.release_info.outputs.RELEASE_NAME }}
+        body: |
+          自动生成的 SteamCMD Windows 构建
+          - 构建时间: ${{ steps.release_info.outputs.BUILD_TIME }}
+          - steamcmd_windows.zip为SteamCmd全包，加速链接:https://gh-proxy.com/github.com/${{ github.repository }}/releases/download/steamcmd-windows-latest/steamcmd_windows.zip
+          - package_windows.zip为更新包，加速链接:https://gh-proxy.com/github.com/${{ github.repository }}/releases/download/steamcmd-windows-latest/package_windows.zip
+          - 此发布每 4 小时自动更新一次
+        draft: false
+        prerelease: false
+        files: |
+          ${{ github.workspace }}/build/steamcmd_windows.zip
+          ${{ github.workspace }}/build/package_windows.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
